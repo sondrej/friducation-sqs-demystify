@@ -1,0 +1,79 @@
+version: "3.9"
+
+volumes:
+  datafiles:
+
+networks:
+  friducation:
+
+services:
+  database:
+    # https://registry.hub.docker.com/_/mysql
+    image: mysql:5.7
+    ports:
+      - "3306:3306"
+    volumes:
+      - datafiles:/var/lib/mysql
+    # Configuration for the mysql server instance is easiest done using command options passed to the startup of the container
+    # To see available options and their defaults, run: docker run -it --rm mysql:tag --verbose --help
+    command: --max-allowed-packet=1G --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-buffer-pool-size=512M --sql-mode=TRADITIONAL
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: test
+      
+  bananas:
+    container_name: "bananas"
+    build:
+      context: .
+      dockerfile: SqsConsumer/Dockerfile
+    depends_on:
+      - localstack
+    environment:
+      - SQS_QUEUE_URL=http://localhost:4566/000000000000/bananas
+      # these AWS variables are bogus, but localstack needs something..
+      - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+      - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=eu-west-1
+      - AWS_DEFAULT_REGION=eu-west-1
+    networks:
+      - friducation
+
+  apples:
+    container_name: "apples"
+    build:
+      context: .
+      dockerfile: SqsConsumer/Dockerfile
+    depends_on:
+      - localstack
+    environment:
+      - SQS_QUEUE_URL=http://localhost:4566/000000000000/apples
+      # these AWS variables are bogus, but localstack needs something..
+      - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+      - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=eu-west-1
+      - AWS_DEFAULT_REGION=eu-west-1
+    networks:
+      - friducation  
+
+  localstack:
+    container_name: "localstack"
+    image: localstack/localstack
+    environment:
+      - EDGE_PORT=4566
+      - SERVICES=s3,sns,sqs
+      - DEBUG=1
+      - AWS_DEFAULT_REGION=eu-west-1
+      - AWS_REGION=eu-west-1
+      - PORT_WEB_UI=8080
+      - SQS_QUEUES=bananas, apples
+    ports:
+      - "4510-4559:4510-4559"
+      - "4566:4566"
+      - "8080:8080"
+    volumes:
+      # all scripts in /Tools/Localstack will be executed by localstack on initialization
+      - ./localstack:/docker-entrypoint-initaws.d
+    networks:
+      - friducation
