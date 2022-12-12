@@ -29,7 +29,8 @@ services:
     depends_on:
       - localstack
     environment:
-      - SQS_QUEUE_URL=http://localhost:4566/000000000000/bananas
+      - SQS_QUEUE_URL=http://localhost:4566/000000000000/banana
+      - SNS_TOPIC_ARN=arn:aws:sns:eu-west-1:000000000000:banana
       # these AWS variables are bogus, but localstack needs something..
       - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
       - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
@@ -47,7 +48,8 @@ services:
     depends_on:
       - localstack
     environment:
-      - SQS_QUEUE_URL=http://localhost:4566/000000000000/apples
+      - SQS_QUEUE_URL=http://localhost:4566/000000000000/apple
+      - SNS_TOPIC_ARN=arn:aws:sns:eu-west-1:000000000000:apple
       # these AWS variables are bogus, but localstack needs something..
       - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
       - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
@@ -55,19 +57,43 @@ services:
       - AWS_REGION=eu-west-1
       - AWS_DEFAULT_REGION=eu-west-1
     networks:
-      - friducation  
-
+      - friducation
+  
+  pineapples:
+    container_name: "pineapples"
+    build:
+      context: .
+      dockerfile: SqsConsumer/Dockerfile
+    depends_on:
+      - localstack
+    environment:
+      - SQS_QUEUE_URL=http://localhost:4566/000000000000/pineapple
+      - SNS_TOPIC_ARN=arn:aws:sns:eu-west-1:000000000000:pineapple
+      - S3_BUCKET_NAME=pineapple
+      # these AWS variables are bogus, but localstack needs something..
+      - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+      - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=eu-west-1
+      - AWS_DEFAULT_REGION=eu-west-1
+    networks:
+      - friducation
+  
   localstack:
     container_name: "localstack"
     image: localstack/localstack
     environment:
       - EDGE_PORT=4566
       - SERVICES=s3,sns,sqs
-      - DEBUG=1
+      - DEBUG=0
       - AWS_DEFAULT_REGION=eu-west-1
       - AWS_REGION=eu-west-1
       - PORT_WEB_UI=8080
-      - SQS_QUEUES=bananas, apples
+      - PROVIDER_OVERRIDE_S3=asf
+      # see localstack/ directory for init scripts
+      - SQS_QUEUES=banana, apple, pineapple
+      - SNS_TOPICS=banana, apple, pineapple
+      - S3_BUCKETS=pineapple
     ports:
       - "4510-4559:4510-4559"
       - "4566:4566"
@@ -75,5 +101,6 @@ services:
     volumes:
       # all scripts in /Tools/Localstack will be executed by localstack on initialization
       - ./localstack:/docker-entrypoint-initaws.d
+      - ./s3items:/pineapples
     networks:
       - friducation
