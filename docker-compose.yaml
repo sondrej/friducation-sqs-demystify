@@ -101,6 +101,5 @@ services:
     volumes:
       # all scripts in /Tools/Localstack will be executed by localstack on initialization
       - ./localstack:/docker-entrypoint-initaws.d
-      - ./s3items:/pineapples
     networks:
       - friducation

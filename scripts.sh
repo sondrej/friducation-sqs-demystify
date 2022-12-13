@@ -65,10 +65,12 @@ function localstack_exec() {
 }
 
 if [ -n "$s3Content" ]; then
-  path="/pineapples/$body"
+  key="$body"
+  path="/s3items/$key"
+  localstack_exec "[ ! -f s3items ] && mkdir s3items"
   localstack_exec "echo $s3Content > $path"
-  localstack_exec "awslocal s3 cp $path s3://$type/$body"
+  localstack_exec "awslocal s3 cp $path s3://$type/$key"
   localstack_exec "rm $path"
 fi
 
-localstack_exec "awslocal sqs send-message --queue-url http://localhost:4566/000000000000/$type --message-body \"$body\""
+localstack_exec "awslocal sqs send-message --queue-url http://localhost:4566/000000000000/$type --message-body \"$key\""
