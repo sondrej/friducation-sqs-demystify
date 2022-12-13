@@ -15,7 +15,7 @@ function usage() {
 }
 
 if [[ "$1" == "start" ]]; then
-  [[ "$2" == "aws" ]] && docker-compose up -d localstack && exit $?
+  [[ "$2" == "aws" ]] && docker-compose up localstack && exit $?
   [[ "$2" == "consumers" ]] && docker-compose up apples bananas pineapples && exit $?
   
   echo "Expected one of aws or consumers to start" && usage && exit 1
@@ -73,4 +73,4 @@ if [ -n "$s3Content" ]; then
   localstack_exec "rm $path"
 fi
 
-localstack_exec "awslocal sqs send-message --queue-url http://localhost:4566/000000000000/$type --message-body \"$key\""
+localstack_exec "awslocal sqs send-message --queue-url http://localhost:4566/000000000000/$type --message-body \"$body\""

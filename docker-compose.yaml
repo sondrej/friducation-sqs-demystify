@@ -1,25 +1,9 @@
 version: "3.9"
 
-volumes:
-  datafiles:
-
 networks:
   friducation:
 
 services:
-  database:
-    # https://registry.hub.docker.com/_/mysql
-    image: mysql:5.7
-    ports:
-      - "3306:3306"
-    volumes:
-      - datafiles:/var/lib/mysql
-    # Configuration for the mysql server instance is easiest done using command options passed to the startup of the container
-    # To see available options and their defaults, run: docker run -it --rm mysql:tag --verbose --help
-    command: --max-allowed-packet=1G --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-buffer-pool-size=512M --sql-mode=TRADITIONAL
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: test
       
   bananas:
     container_name: "bananas"
