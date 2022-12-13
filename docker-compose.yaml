@@ -85,7 +85,7 @@ services:
     environment:
       - EDGE_PORT=4566
       - SERVICES=s3,sns,sqs
-      - DEBUG=0
+      - DEBUG=1
       - AWS_DEFAULT_REGION=eu-west-1
       - AWS_REGION=eu-west-1
       - PORT_WEB_UI=8080

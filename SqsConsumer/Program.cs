@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Amazon.Runtime;
 using Amazon.S3;
+using Amazon.S3.Model;
 using Amazon.SimpleNotificationService;
 using Amazon.SQS;
 using Amazon.SQS.Model;
@@ -62,7 +63,7 @@ var sqsReceiveRequest = new ReceiveMessageRequest
     WaitTimeSeconds = 20
 };
 
-static Func<Message, CancellationToken, Task> CreateHandleMessage(
+static Func<Message, CancellationToken, ValueTask> CreateHandleMessage(
     IAmazonSQS sqsClient,
     IAmazonSimpleNotificationService snsClient,
     IAmazonS3 s3Client,
@@ -82,24 +83,26 @@ static Func<Message, CancellationToken, Task> CreateHandleMessage(
         if (bucketName != null)
         {
             var bucketKey = message.Body;
+            GetObjectResponse response;
             try
-            {
-                var bucketItem = await s3Client.GetObjectAsync(bucketName, bucketKey, token);
-                using var reader = new StreamReader(bucketItem.ResponseStream);
-                var content = await reader.ReadToEndAsync(token);
-                if (content.Contains("fail"))
-                {
-                    throw new HandleMessageException(message);
-                }
-                Console.WriteLine($"Processed message with S3 content: {content}");
-
-                token.ThrowIfCancellationRequested();
-                await s3Client.DeleteObjectAsync(bucketName, bucketKey);
+            { 
+                response = await s3Client.GetObjectAsync(bucketName, bucketKey, token);
             }
             catch (Exception ex)
             {
-                throw new HandleMessageException(message, $"Error reading s3 item with key {bucketKey}. Exception message {ex.Message}");
+                throw new HandleMessageException(message,
+                    $"Error reading S3 file, exception message {ex.Message}");
             }
+            using var reader = new StreamReader(response.ResponseStream);
+            var content = await reader.ReadToEndAsync(token);
+            if (content.Contains("fail"))
+            {
+                throw new HandleMessageException(message);
+            }
+            Console.WriteLine($"Processed message with S3 content: {content}");
+
+            token.ThrowIfCancellationRequested();
+            await s3Client.DeleteObjectAsync(bucketName, bucketKey);
         }
         else
         {
@@ -126,19 +129,23 @@ while (!tokenSource.IsCancellationRequested)
         // Any message we receive here is "invisible" on the queue with a timeout
         // If we fail to process the message (IE remove the message from the queue) within the timeout, 
         // it will be made receivable for other consumers.
-        msg
-            .Messages
-            .AsParallel()
-            .ForAll(message => handler(message, tokenSource.Token));
+
+        var po = new ParallelOptions
+        {
+            CancellationToken = tokenSource.Token,
+            MaxDegreeOfParallelism = Environment.ProcessorCount
+        };
+        await Parallel.ForEachAsync(msg.Messages, po, handler);
     }
     // No need to crash the consumer process here, but assume any other exception is one we cannot recover from.
     // In a fargate instance, we'd let AWS restart the instance when we get any other exception.
     // In a lambda we would just let this error propagate as well, and always delete a message when we're done with it.
     catch (AggregateException ex) when (ex.InnerException is HandleMessageException)
     {
+        Console.WriteLine(ex.Message);
         foreach (var innerException in ex.InnerExceptions)
         {
-            Console.Error.WriteLine(innerException.Message);
+            Console.WriteLine(innerException.Message);
             //Console.Error.WriteLine(JsonSerializer.Serialize((innerException as HandleMessageException)!.SqsMessage.MessageAttributes));
         }
     }
