@@ -54,8 +54,8 @@ var sqsReceiveRequest = new ReceiveMessageRequest
     QueueUrl = queueUrl,
     // Useful attributes on message for tracing, should be tuned for usage.
     AttributeNames = new List<string>{ "All" },
-    // can be tuned how many messages we want to receive, tune to fit thread-count of host
-    MaxNumberOfMessages = 20, 
+    // max 10, tune for use-case and thread count
+    MaxNumberOfMessages = Math.Min(10, Environment.ProcessorCount),
     // 1 second visibility timout. We need to process the message within this time-frame
     VisibilityTimeout = 5,
     // long polling, maximum wait time is 20 seconds. This reduces costs by reducing amount of empty responses
