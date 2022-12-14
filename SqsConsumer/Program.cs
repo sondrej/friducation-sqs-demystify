@@ -20,7 +20,7 @@ PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ =>
 });
 
 var snsTopicArn = Environment.GetEnvironmentVariable("SNS_TOPIC_ARN")!;
-using var snsClient = new AmazonSimpleNotificationServiceClient(new AmazonSimpleNotificationServiceConfig
+var snsClient = new AmazonSimpleNotificationServiceClient(new AmazonSimpleNotificationServiceConfig
 {
     DefaultConfigurationMode = DefaultConfigurationMode.Standard,
     // these should only be set when targeting localstack
@@ -29,7 +29,7 @@ using var snsClient = new AmazonSimpleNotificationServiceClient(new AmazonSimple
 });
 
 var queueUrl = Environment.GetEnvironmentVariable("SQS_QUEUE_URL")!;
-using var sqsClient = new AmazonSQSClient(new AmazonSQSConfig
+var sqsClient = new AmazonSQSClient(new AmazonSQSConfig
 {
     DefaultConfigurationMode = DefaultConfigurationMode.Standard,
     // these should only be set when targeting localstack
@@ -38,7 +38,7 @@ using var sqsClient = new AmazonSQSClient(new AmazonSQSConfig
 });
 
 var bucketName = Environment.GetEnvironmentVariable("S3_BUCKET_NAME");
-using var s3Client = new AmazonS3Client(new AmazonS3Config
+var s3Client = new AmazonS3Client(new AmazonS3Config
 {
     DefaultConfigurationMode = DefaultConfigurationMode.Standard,
     // these should only be set when targeting localstack
@@ -48,14 +48,13 @@ using var s3Client = new AmazonS3Client(new AmazonS3Config
 });
 
 var handlerType = queueUrl.Split("/")[^1];
-var handler = CreateHandleMessage(sqsClient, snsClient, s3Client, queueUrl, snsTopicArn, bucketName, handlerType);
 var sqsReceiveRequest = new ReceiveMessageRequest
 {
     QueueUrl = queueUrl,
     // Useful attributes on message for tracing, should be tuned for usage.
     AttributeNames = new List<string>{ "All" },
     // max 10, tune for use-case and thread count
-    MaxNumberOfMessages = Math.Min(10, Environment.ProcessorCount),
+    MaxNumberOfMessages = 10,
     // 1 second visibility timout. We need to process the message within this time-frame
     VisibilityTimeout = 5,
     // long polling, maximum wait time is 20 seconds. This reduces costs by reducing amount of empty responses
@@ -63,57 +62,40 @@ var sqsReceiveRequest = new ReceiveMessageRequest
     WaitTimeSeconds = 20
 };
 
-static Func<Message, CancellationToken, ValueTask> CreateHandleMessage(
-    IAmazonSQS sqsClient,
-    IAmazonSimpleNotificationService snsClient,
-    IAmazonS3 s3Client,
-    string queueUrl,
-    string topicArn,
-    string? bucketName,
-    string handlerType
-    )
+async Task HandleMessage(Message message)
 {
-    return async (message, token) =>
+    if (message.Body.Contains("fail"))
+        throw new Exception($"Could not handle message {message.MessageId}");
+
+    // Do stuff with message here, eg store in db etc.
+    if (bucketName != null)
     {
-        Console.WriteLine($"Received message with id: {message.MessageId}");
-        if (message.Body.Contains("fail"))
-            throw new HandleMessageException(message);
-
-        // Do stuff with message here, eg store in db etc.
-        if (bucketName != null)
-        {
-            var bucketKey = message.Body;
-            GetObjectResponse response;
-            try
-            { 
-                response = await s3Client.GetObjectAsync(bucketName, bucketKey, token);
-            }
-            catch (Exception ex)
-            {
-                throw new HandleMessageException(message,
-                    $"Error reading S3 file, exception message {ex.Message}");
-            }
-            using var reader = new StreamReader(response.ResponseStream);
-            var content = await reader.ReadToEndAsync(token);
-            if (content.Contains("fail"))
-            {
-                throw new HandleMessageException(message);
-            }
-            Console.WriteLine($"Processed message with S3 content: {content}");
-
-            token.ThrowIfCancellationRequested();
-            await s3Client.DeleteObjectAsync(bucketName, bucketKey);
+        var bucketKey = message.Body;
+        GetObjectResponse response;
+        try
+        { 
+            response = await s3Client.GetObjectAsync(bucketName, bucketKey);
         }
-        else
+        catch (Exception ex)
         {
-            Console.WriteLine($"Processed message with Body: {message.Body}");
+            throw new Exception($"Error reading S3 file, exception message {ex.Message}");
         }
+        using var reader = new StreamReader(response.ResponseStream);
+        var content = await reader.ReadToEndAsync();
+        if (content.Contains("fail"))
+        {
+            throw new Exception($"Could not read s3 content. messageId {message.MessageId}");
+        }
+        Console.WriteLine($"Processed message with S3 content: {content}");
 
-        token.ThrowIfCancellationRequested();
-        // We're done processing this message, it can now be removed from the queue
-        await sqsClient.DeleteMessageAsync(queueUrl, message.ReceiptHandle, token);
-        await snsClient.PublishAsync(topicArn, JsonSerializer.Serialize(new SnsEvent($"{handlerType}-updated", message.Body)), token);
-    };
+        await s3Client.DeleteObjectAsync(bucketName, bucketKey);
+    }
+    else
+    {
+        Console.WriteLine($"Message Body: {message.Body}");
+    }
+
+    await snsClient.PublishAsync(snsTopicArn, JsonSerializer.Serialize(new SnsEvent($"{handlerType}-updated", message.Body)));
 }
 
 Console.WriteLine($"Started {handlerType} consumer");
@@ -123,58 +105,26 @@ Console.WriteLine($"Started {handlerType} consumer");
 // If running in a fargate, you typically want a thread spinning on ReceiveMessage as we do here
 while (!tokenSource.IsCancellationRequested)
 {
-    try
-    {
-        var msg = await sqsClient.ReceiveMessageAsync(sqsReceiveRequest, tokenSource.Token);
-        // Any message we receive here is "invisible" on the queue with a timeout
-        // If we fail to process the message (IE remove the message from the queue) within the timeout, 
-        // it will be made receivable for other consumers.
+    var msg = await sqsClient.ReceiveMessageAsync(sqsReceiveRequest, tokenSource.Token);
+    // Any message we receive here is "invisible" on the queue with a timeout
+    // If we fail to process the message (IE remove the message from the queue) within the timeout, 
+    // it will be made receivable for other consumers.
 
-        var po = new ParallelOptions
-        {
-            CancellationToken = tokenSource.Token,
-            MaxDegreeOfParallelism = Environment.ProcessorCount
-        };
-        await Parallel.ForEachAsync(msg.Messages, po, handler);
-    }
-    // No need to crash the consumer process here, but assume any other exception is one we cannot recover from.
-    // In a fargate instance, we'd let AWS restart the instance when we get any other exception.
-    // In a lambda we would just let this error propagate as well, and always delete a message when we're done with it.
-    catch (AggregateException ex) when (ex.InnerException is HandleMessageException)
+    await Task.WhenAll(msg.Messages.Select(async message =>
     {
-        Console.WriteLine(ex.Message);
-        foreach (var innerException in ex.InnerExceptions)
+        Console.WriteLine($"Received message with id: {message.MessageId}");
+        try
         {
-            Console.WriteLine(innerException.Message);
-            //Console.Error.WriteLine(JsonSerializer.Serialize((innerException as HandleMessageException)!.SqsMessage.MessageAttributes));
+            await HandleMessage(message);
+            // We're done processing this message, it can now be removed from the queue
+            await sqsClient.DeleteMessageAsync(queueUrl, message.ReceiptHandle);
+            Console.WriteLine($"Processed message with id: {message.MessageId}");
         }
-    }
-    catch (HandleMessageException ex)
-    {
-        Console.Error.WriteLine(ex.Message);
-        //Console.Error.WriteLine(JsonSerializer.Serialize(ex.SqsMessage.MessageAttributes));
-    }
-    catch (Exception)
-    {
-        tokenSource.Cancel();
-        throw;
-    }
-}
-
-internal sealed class HandleMessageException : Exception
-{
-    // Could be useful to include some properties from the message in the logs, hence this property
-    public Message SqsMessage { get; }
-
-    public HandleMessageException(Message message) : base($"Could not handle message {message.MessageId}")
-    {
-        SqsMessage = message;
-    }
-
-    public HandleMessageException(Message message, string exceptionMessage) : base(exceptionMessage)
-    {
-        SqsMessage = message;
-    }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+    }));
 }
 
 [Serializable]

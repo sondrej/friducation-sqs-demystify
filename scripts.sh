@@ -32,7 +32,7 @@ if [[ "$1" == "dlq" ]]; then
     echo "Receiving up to 10 messages in $type-dlq"
     localstack_exec "awslocal sqs receive-message --queue-url http://localhost:4566/000000000000/$type-dlq --max-number-of-messages 10 --wait-time-seconds 1"
   done
-  if [[ "$2" == "purge" ]]; then
+  if [[ "${2-}" == "purge" ]]; then
     for type in "${types[@]}"; do
       echo "Purging all messages in queue $type-dlq"
       localstack_exec "awslocal sqs purge-queue --queue-url http://localhost:4566/000000000000/$type-dlq"
