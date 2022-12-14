@@ -123,6 +123,8 @@ while (!tokenSource.IsCancellationRequested)
         catch (Exception ex)
         {
             Console.WriteLine(ex.Message);
+            // In some cases we might want to let the error bubble up and crash the service, then letting aws restart the service for us.
+            // This is because some exceptions are such that we cannot recover without a restart.
         }
     }));
 }
