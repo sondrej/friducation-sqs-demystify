@@ -62,6 +62,25 @@ services:
       - AWS_DEFAULT_REGION=eu-west-1
     networks:
       - friducation
+
+  fruitcake:
+    container_name: "fruitcake"
+    build: 
+      context: .
+      dockerfile: SnsSubscriber/Dockerfile
+    depends_on:
+      - localstack
+    environment:
+      - SQS_QUEUE_URL=http://localhost:4566/000000000000/fruits
+      - SNS_TOPIC_ARNS=arn:aws:sns:eu-west-1:000000000000:pineapple,arn:aws:sns:eu-west-1:000000000000:apple,arn:aws:sns:eu-west-1:000000000000:banana
+      # these AWS variables are bogus, but localstack needs something..
+      - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+      - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=eu-west-1
+      - AWS_DEFAULT_REGION=eu-west-1
+    networks:
+      - friducation
   
   localstack:
     container_name: "localstack"
@@ -75,7 +94,7 @@ services:
       - PORT_WEB_UI=8080
       - PROVIDER_OVERRIDE_S3=asf
       # see localstack/ directory for init scripts
-      - SQS_QUEUES=banana, apple, pineapple
+      - SQS_QUEUES=banana, apple, pineapple, fruits
       - SNS_TOPICS=banana, apple, pineapple
       - S3_BUCKETS=pineapple
     ports:

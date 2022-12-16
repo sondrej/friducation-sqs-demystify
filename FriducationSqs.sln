@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqsConsumer", "SqsConsumer\SqsConsumer.csproj", "{FFC080DC-8992-4EC6-B9C2-DEA3592CAFF8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SnsSubscriber", "SnsSubscriber\SnsSubscriber.csproj", "{5EF8D0D7-8323-42B0-B3C5-3882E50B0E90}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{FFC080DC-8992-4EC6-B9C2-DEA3592CAFF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FFC080DC-8992-4EC6-B9C2-DEA3592CAFF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FFC080DC-8992-4EC6-B9C2-DEA3592CAFF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5EF8D0D7-8323-42B0-B3C5-3882E50B0E90}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5EF8D0D7-8323-42B0-B3C5-3882E50B0E90}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5EF8D0D7-8323-42B0-B3C5-3882E50B0E90}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5EF8D0D7-8323-42B0-B3C5-3882E50B0E90}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

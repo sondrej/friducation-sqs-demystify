@@ -13,6 +13,7 @@ function usage() {
     echo -e "  -t\t type: one of apple, banana or pineapple"
     echo -e "  -b\t body: message body"
     echo -e "dlq: get all messages in dead letter queues"
+    echo -e "  purge: get and purge dead letter queues"
 }
 
 function localstack_exec() {
@@ -22,7 +23,7 @@ function localstack_exec() {
 
 if [[ "$1" == "start" ]]; then
   [[ "$2" == "aws" ]] && docker-compose up localstack && exit $?
-  [[ "$2" == "consumers" ]] && docker-compose up apples bananas pineapples && exit $?
+  [[ "$2" == "consumers" ]] && docker-compose up apples bananas pineapples fruitcake && exit $?
   
   echo "Expected one of aws or consumers to start" && usage && exit 1
 fi
