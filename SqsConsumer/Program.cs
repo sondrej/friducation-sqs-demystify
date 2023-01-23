@@ -88,6 +88,8 @@ async Task HandleMessage(Message message)
         }
         Console.WriteLine($"Processed message with S3 content: {content}");
 
+        // Usually you typically want a retention policy on S3 instead of explicitly deleting the object
+        // This is use-case specific tho, so do what your needs require here. I'm including it here just for "completeness".
         await s3Client.DeleteObjectAsync(bucketName, bucketKey);
     }
     else
